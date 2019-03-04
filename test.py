@@ -21,10 +21,11 @@ from collections import namedtuple
 timestamp_format = '%Y:%m:%d_%H:%M:%S'
 c_connections = defaultdict(list)
 u_connections = defaultdict(list)
-c_totals = defaultdict(int)
-u_totals = defaultdict(int)
-agg_c_totals = {}
-agg_u_totals = {}
+c_totals = defaultdict(long)
+u_totals = defaultdict(long)
+agg_c_totals = defaultdict(long)
+agg_u_totals = defaultdict(long)
+MAXINT32 = 2 ** 31
 
 Event = namedtuple('Event', 'time bytes rate')
 
@@ -82,8 +83,17 @@ def processfiles(path):
     for f in fnames:
         processfile(join(path,f))
 
-    # calculate_totals(c_connections,c_totals)
+    calculate_totals(c_connections,c_totals)
     calculate_totals(u_connections,u_totals)
+    aggregate_totals(c_totals, agg_c_totals)
+    aggregate_totals(u_totals, agg_u_totals)
+
+#------------------------------------------------------------------------------
+def aggregate_totals(cont,totalscont):
+    for t in cont:
+        (act, id) = t.split(":")
+        print ("aggregate_totals act {0} id {1} add {2} bytes".format(act,id,cont[t]))
+        totalscont[act] += cont[t]
 
 #------------------------------------------------------------------------------
 def calculate_totals(cont,totalscont):
@@ -91,34 +101,61 @@ def calculate_totals(cont,totalscont):
     for i in cont:
         cont[i].sort()
         uuidevents = cont[i]
-        totals = totalscont[i]
+        bytesmin = None
+        bytesmax = None
+        print "Events for {0}".format(i)
         for e in uuidevents:
-            print e
+            print " Event: {0}".format(e)
             time = e.time
             nbytes = e.bytes
-            print ("Add {0} bytes to totals {1}".format(nbytes,totals))
-            totals = totals + nbytes
-        
+
+            # first iteration
+            if bytesmin is None:
+                print(" assign bytesmin,bytesmax  = {0}".format(nbytes))
+                bytesmin = nbytes
+                bytesmax = nbytes
+
+            # non-first iteration
+            if nbytes > bytesmax:
+                print(" nbytes > {0} set bytesmax  = {0}".format(bytesmax,nbytes))
+                bytesmax = nbytes
+            elif nbytes < bytesmax:
+                # most likely integer rollover
+                print ("nbytes {0} < bytesmax {1}".format(nbytes, bytesmax))
+                ovflw = MAXINT32 - nbytes
+                bytesmax = (MAXINT32 - prev) + nbytes
+                print "ovflw={0} maxint={1} nbytes={2} prev={3} set bytesmax to {4}\n".format(ovflw, MAXINT32, nbytes,prev, bytesmax)
+
+            print ("set prev to {0}".format(nbytes))
+            prev = nbytes
+
+        totalscont[i] = bytesmax - bytesmin
+        print("totalscont[i]{0}  = bytesmax {1} - bytesmin {2}".format(totalscont[i], bytesmax,bytesmin))
+                
 #------------------------------------------------------------------------------
 def main():
     processfiles('testdata')
 
     print ("\nResults:")
 
-    # print ('==============\nc connections:\n==============')
+    print ('==============\nc connections:\n==============')
     # for c in c_connections:
     #     print("Total bytes: {0}".format(c_totals[c]))
     #     for evt in c_connections[c]:
     #         print "{0} {1}".format(c, evt)
     #     print "-----------------------"
+    for t in agg_c_totals:
+        print ("{0}: {1}".format(t, agg_c_totals[t]))
 
     print ("==============\nu connections:\n==============")
-    for u in u_connections:
-        print("Total bytes: {0}".format(u_totals[u]))
-        for evt in u_connections[u]:
-            print "{0} {1}".format(u, evt)
-        print "-----------------------"
-        
+    # for u in u_connections:
+    #     print("Total bytes: {0}".format(u_totals[u]))
+    #     for evt in u_connections[u]:
+    #         print "{0} {1}".format(u, evt)
+    #     print "-----------------------"
+
+    for t in agg_u_totals:
+        print ("{0}: {1}".format(t, agg_u_totals[t]))
 
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
