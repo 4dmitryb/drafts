@@ -1,0 +1,14 @@
+resources:
+- name: resource1
+  type: git
+  source:
+    uri: https://github.com/4dmitryb/drafts.git
+    branch: develop
+
+jobs:
+- name: job-hello-world
+  public: true
+  plan:
+  - get: resource1
+  - task: hello-world
+    file: resource1/sdp/tasks/testtask.yml
