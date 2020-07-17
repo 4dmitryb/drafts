@@ -3,7 +3,7 @@ resources:
   type: git
   source:
     uri: https://github.com/4dmitryb/drafts.git
-    branch: develop
+    branch: master
 
 jobs:
 - name: job-hello-world
